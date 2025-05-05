@@ -19,11 +19,25 @@
       const height = canvas.height;
 
       // Definisi scene dengan satu sphere, siap untuk multiple object
-      const spheres = [{
-        center: vec3.fromValues(0, 0, -5),
-        radius: 1,
-        color: [255, 0, 0]  // Merah
-      }];
+        const spheres = [
+            {
+                center: vec3.fromValues(0, 0, -5),
+                radius: 1,
+                color: [255, 0, 0]  // Bola utama - Merah
+            },
+            {
+                center: vec3.fromValues(-1.5, 0.5, -4),
+                radius: 0.5,
+                color: [0, 255, 0]  // Bola pembanding kiri atas - Hijau
+            },
+            {
+                center: vec3.fromValues(1.2, -0.5, -6),
+                radius: 0.8,
+                color: [0, 128, 255]  // Bola pembanding kanan bawah - Biru
+            }
+        ];
+
+
 
       // Posisi kamera di origin
       const origin = vec3.fromValues(0, 0, 0);
