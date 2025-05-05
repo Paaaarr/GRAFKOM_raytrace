@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Raytracing Demo Dasar</title>
+</head>
+<body>
+  <canvas id="canvas" width="500" height="500"></canvas>
+
+  <!-- Sertakan gl-matrix dari CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+  <!-- Sertakan file helper.js -->
+  <script src="helper.js"></script>
+  <script>
+    (function() {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+
+      const spheres = [
+        { center: vec3.fromValues(0, 0, -5), radius: 1, color: [255, 0, 0] },
+        { center: vec3.fromValues(-1.5, 0.5, -4), radius: 0.5, color: [0, 255, 0] },
+        { center: vec3.fromValues(1.2, -0.5, -6), radius: 0.8, color: [0, 128, 255] }
+      ];
+
+      const origin = vec3.fromValues(0, 0, 0);
+
+      // Arah datang cahaya (dari kiri atas depan)
+      const lightDir = vec3.normalize(vec3.create(), vec3.fromValues(-1, -1, -1));
+
+      let imageData = ctx.createImageData(width, height);
+
+      // Fungsi intersectSphere dimodifikasi untuk memberi titik tumbuk & normal
+      function intersectSphere(origin, dir, sphere) {
+        let oc = vec3.create();
+        vec3.subtract(oc, origin, sphere.center);
+        let a = vec3.dot(dir, dir);
+        let b = 2.0 * vec3.dot(oc, dir);
+        let c = vec3.dot(oc, oc) - sphere.radius * sphere.radius;
+        let discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) return null;
+
+        let t = (-b - Math.sqrt(discriminant)) / (2.0 * a);
+        if (t < 0) return null;
+
+        let hitPoint = vec3.create();
+        vec3.scaleAndAdd(hitPoint, origin, dir, t);
+
+        let normal = vec3.create();
+        vec3.subtract(normal, hitPoint, sphere.center);
+        vec3.normalize(normal, normal);
+
+        return { t, point: hitPoint, normal };
+      }
+
+      for (let j = 0; j < height; j++) {
+        for (let i = 0; i < width; i++) {
+          let u = (i + 0.5) / width * 2 - 1;
+          let v = 1 - (j + 0.5) / height * 2;
+
+          let dir = vec3.fromValues(u, v, -1);
+          vec3.normalize(dir, dir);
+
+          let pixelColor = [0, 0, 0, 255];
+          let closestT = Infinity;
+
+          for (let k = 0; k < spheres.length; k++) {
+            const result = intersectSphere(origin, dir, spheres[k]);
+            if (result && result.t < closestT) {
+              closestT = result.t;
+              const baseColor = spheres[k].color;
+              const diffuse = Math.max(0, vec3.dot(result.normal, vec3.negate(vec3.create(), lightDir)));
+              pixelColor = [
+                Math.min(255, baseColor[0] * diffuse),
+                Math.min(255, baseColor[1] * diffuse),
+                Math.min(255, baseColor[2] * diffuse),
+                255
+              ];
+            }
+          }
+
+          let index = (j * width + i) * 4;
+          imageData.data[index + 0] = pixelColor[0];
+          imageData.data[index + 1] = pixelColor[1];
+          imageData.data[index + 2] = pixelColor[2];
+          imageData.data[index + 3] = pixelColor[3];
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    })();
+  </script>
+</body>
+</html>
