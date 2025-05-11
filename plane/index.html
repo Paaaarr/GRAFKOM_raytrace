@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <title>Raytracing Demo - Bola Tengah, Lantai Abu-Putih (Tanpa Shadow)</title>
+  <style>
+    body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #202025; } 
+    canvas { border: 1px solid #383840; box-shadow: 0 0 12px rgba(0,0,0,0.4); } 
+  </style>
+</head>
+<body>
+  <canvas id="canvas" width="500" height="500"></canvas>
+
+  <!-- Sertakan gl-matrix dari CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script>
+  <!-- Sertakan file helper.js -->
+  <script src="helper.js"></script>
+  <script>
+    (function() {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+      const width = canvas.width;
+      const height = canvas.height;
+
+      const epsilon = 0.0001; 
+
+      // Menurunkan level lantai agar bola merah bisa benar-benar di tengah (Y=0)
+      const planeLevelY = -2.0; 
+
+      // Radius bola
+      const redSphereRadius = 2.0; 
+      const greenSphereRadius = 1.0; 
+      const blueSphereRadius = 1.1;  
+
+      // Ketinggian pusat Y agar bagian bawah bola menyentuh lantai
+      // Dengan planeLevelY = -2.0 dan redSphereRadius = 2.0, redSphereCenterY akan menjadi 0.0
+      const redSphereCenterY = planeLevelY + redSphereRadius;     
+      const greenSphereCenterY = planeLevelY + greenSphereRadius; 
+      const blueSphereCenterY = planeLevelY + blueSphereRadius;   
+
+      // Material properties dan posisi baru disesuaikan dengan gambar referensi
+      const spheres = [
+        // Bola Merah (Utama, paling besar, di tengah)
+        { center: vec3.fromValues(0.5,    redSphereCenterY,   -6.0), radius: redSphereRadius,   color: [255, 0, 0],   specular: 0.8, shininess: 40 }, 
+        // Bola Hijau (Kiri bola merah, sedikit tumpang tindih)
+        { center: vec3.fromValues(-2, redSphereCenterY, -4.5), radius: greenSphereRadius, color: [0, 255, 0],   specular: 0.6, shininess: 25 }, 
+        // Bola Biru (Kanan bola merah, sedikit tumpang tindih)
+        { center: vec3.fromValues(3,  redSphereCenterY,  -5.8), radius: blueSphereRadius,  color: [0, 128, 255], specular: 0.5, shininess: 15 }  
+      ];
+
+      const plane = {
+        point: vec3.fromValues(0, planeLevelY, 0), 
+        normal: vec3.fromValues(0, 1, 0),   
+        color1: [120, 120, 120],           // Warna lantai 1: Abu-abu sedang
+        color2: [245, 245, 245],           // Warna lantai 2: Putih / Sangat terang
+        specular: 0.02,                    
+        shininess: 5,
+        isPlane: true 
+      };
+
+      const origin = vec3.fromValues(0, 0, 0); // Kamera di origin
+
+      const lightDirection = vec3.normalize(vec3.create(), vec3.fromValues(0.7, -0.6, -0.4)); 
+      const lightColor = [1, 1, 1]; 
+      const ambientLightIntensity = [0.12, 0.12, 0.15]; 
+
+      let imageData = ctx.createImageData(width, height);
+
+      const _vectorToLight = vec3.create(); 
+      const _reflVec = vec3.create();
+      const _viewDirFromHit = vec3.create(); 
+
+
+      function intersectSphere(origin, dir, sphere) {
+        let oc = vec3.create();
+        vec3.subtract(oc, origin, sphere.center);
+        let a = vec3.dot(dir, dir); 
+        let b = 2.0 * vec3.dot(oc, dir);
+        let c = vec3.dot(oc, oc) - sphere.radius * sphere.radius;
+        let discriminant = b * b - 4 * a * c;
+
+        if (discriminant < 0) return null;
+
+        let t = (-b - Math.sqrt(discriminant)) / (2.0 * a);
+        if (t < epsilon) { 
+            t = (-b + Math.sqrt(discriminant)) / (2.0 * a);
+            if (t < epsilon) return null;
+        }
+        
+        let hitPoint = vec3.create();
+        vec3.scaleAndAdd(hitPoint, origin, dir, t);
+
+        let normal = vec3.create();
+        vec3.subtract(normal, hitPoint, sphere.center);
+        vec3.normalize(normal, normal);
+
+        return { t, point: hitPoint, normal, object: sphere };
+      }
+
+      function intersectPlane(origin, dir, planeObj) {
+        const N = planeObj.normal;
+        const P0 = planeObj.point;
+        const DdotN = vec3.dot(dir, N);
+
+        if (Math.abs(DdotN) < epsilon) return null; 
+
+        let P0O = vec3.create(); 
+        vec3.subtract(P0O, P0, origin);
+        let t = vec3.dot(P0O, N) / DdotN;
+
+        if (t < epsilon) return null; 
+
+        let hitPoint = vec3.create();
+        vec3.scaleAndAdd(hitPoint, origin, dir, t);
+        return { t, point: hitPoint, normal: vec3.clone(N), object: planeObj };
+      }
+
+      function calculateLighting(hitPoint, normal, viewDirection, objectColor, materialSpecular, materialShininess) {
+        let finalColor = vec3.create();
+
+        vec3.set(finalColor,
+            objectColor[0] * ambientLightIntensity[0],
+            objectColor[1] * ambientLightIntensity[1],
+            objectColor[2] * ambientLightIntensity[2]
+        );
+        
+        vec3.negate(_vectorToLight, lightDirection); 
+        let NdotL = vec3.dot(normal, _vectorToLight);
+        let diffuseIntensity = Math.max(0, NdotL);
+
+        if (diffuseIntensity > 0) {
+            finalColor[0] += objectColor[0] * diffuseIntensity * lightColor[0];
+            finalColor[1] += objectColor[1] * diffuseIntensity * lightColor[1];
+            finalColor[2] += objectColor[2] * diffuseIntensity * lightColor[2];
+        }
+
+        vec3.scale(_reflVec, normal, 2 * NdotL);
+        vec3.subtract(_reflVec, _reflVec, _vectorToLight);
+        
+        vec3.negate(_viewDirFromHit, viewDirection); 
+        vec3.normalize(_viewDirFromHit, _viewDirFromHit); 
+
+        let RdotV = vec3.dot(_reflVec, _viewDirFromHit);
+        let specularIntensity = Math.pow(Math.max(0, RdotV), materialShininess);
+
+        if (specularIntensity > 0) {
+            finalColor[0] += 255 * lightColor[0] * specularIntensity * materialSpecular;
+            finalColor[1] += 255 * lightColor[1] * specularIntensity * materialSpecular;
+            finalColor[2] += 255 * lightColor[2] * specularIntensity * materialSpecular;
+        }
+        
+        return [
+            Math.min(255, finalColor[0]),
+            Math.min(255, finalColor[1]),
+            Math.min(255, finalColor[2]),
+            255
+        ];
+      }
+
+
+      for (let j = 0; j < height; j++) {
+        for (let i = 0; i < width; i++) {
+          let u = (i + 0.5) / width * 2 - 1;
+          let v = 1 - (j + 0.5) / height * 2; 
+
+          let dir = vec3.fromValues(u, v, -1); 
+          vec3.normalize(dir, dir);
+
+          let pixelColor = [20, 20, 25, 255]; 
+          let closestHit = null;
+
+          for (let k = 0; k < spheres.length; k++) {
+            const result = intersectSphere(origin, dir, spheres[k]);
+            if (result && (!closestHit || result.t < closestHit.t)) {
+              closestHit = result;
+            }
+          }
+
+          const planeHit = intersectPlane(origin, dir, plane);
+          if (planeHit && (!closestHit || planeHit.t < closestHit.t)) {
+            closestHit = planeHit;
+          }
+
+          if (closestHit) {
+            let baseColor;
+            let materialSpecular;
+            let materialShininess;
+
+            if (closestHit.object.isPlane) {
+              const z = closestHit.point[2];
+              const x = closestHit.point[0];
+              const freqX1 = 0.28; 
+              const freqZ1 = 0.38;
+              const freqX2 = 0.12;
+              const freqZ2 = 0.18;
+              
+              let t = (Math.sin(x * freqX1 + z * freqZ1) * Math.cos(x * freqX2 - z * freqZ2 * 0.5) + 1) / 2;
+
+              baseColor = [
+                plane.color1[0] * (1 - t) + plane.color2[0] * t,
+                plane.color1[1] * (1 - t) + plane.color2[1] * t,
+                plane.color1[2] * (1 - t) + plane.color2[2] * t
+              ];
+              materialSpecular = plane.specular;
+              materialShininess = plane.shininess;
+            } else { // It's a sphere
+              baseColor = closestHit.object.color;
+              materialSpecular = closestHit.object.specular;
+              materialShininess = closestHit.object.shininess;
+            }
+            
+            pixelColor = calculateLighting(closestHit.point, closestHit.normal, dir, baseColor, materialSpecular, materialShininess);
+          }
+
+          let index = (j * width + i) * 4;
+          imageData.data[index + 0] = pixelColor[0];
+          imageData.data[index + 1] = pixelColor[1];
+          imageData.data[index + 2] = pixelColor[2];
+          imageData.data[index + 3] = pixelColor[3];
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+    })();
+  </script>
+</body>
+</html>
