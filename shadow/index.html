@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Raytracing Demo - Tanpa Shadow, Pencahayaan Tetap</title>
+  <title>Raytracing Demo - Shadow Lebih Dekat, Tata Letak Bola Tetap</title>
   <style>
     body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background-color: #202025; } 
     canvas { border: 1px solid #383840; box-shadow: 0 0 12px rgba(0,0,0,0.4); } 
@@ -52,17 +52,19 @@
 
       const origin = vec3.fromValues(0, 0, 0); 
 
+      // Mengubah arah cahaya agar lebih dari atas
+      // Y lebih negatif, X dan Z mungkin sedikit disesuaikan
       const lightDirection = vec3.normalize(vec3.create(), vec3.fromValues(0.4, -0.85, -0.3)); 
       const lightColor = [1, 1, 1]; 
-      // Intensitas ambient bisa sedikit diturunkan lagi jika tanpa bayangan hasilnya terlalu flat
-      const ambientLightIntensity = [0.18, 0.18, 0.20]; 
+      const ambientLightIntensity = [0.25, 0.25, 0.28]; // Dipertahankan dari sebelumnya
 
       let imageData = ctx.createImageData(width, height);
 
       const _vectorToLight = vec3.create(); 
       const _reflVec = vec3.create();
       const _viewDirFromHit = vec3.create(); 
-      // _shadowRayOrigin dan _shadowRayDirToLight tidak digunakan lagi
+      const _shadowRayOrigin = vec3.create();
+      const _shadowRayDirToLight = vec3.create();
 
 
       function intersectSphere(origin, dir, sphere) {
@@ -109,8 +111,7 @@
         return { t, point: hitPoint, normal: vec3.clone(N), object: planeObj };
       }
 
-      // Parameter isInShadow dihilangkan karena tidak ada bayangan
-      function calculateLighting(hitPoint, normal, viewDirection, objectColor, materialSpecular, materialShininess) {
+      function calculateLighting(hitPoint, normal, viewDirection, objectColor, materialSpecular, materialShininess, isInShadow) {
         let finalColor = vec3.create();
 
         vec3.set(finalColor,
@@ -119,7 +120,14 @@
             objectColor[2] * ambientLightIntensity[2]
         );
 
-        // Karena tidak ada bayangan, selalu hitung diffuse dan specular
+        if (isInShadow) { 
+            return [
+                Math.min(255, finalColor[0]),
+                Math.min(255, finalColor[1]),
+                Math.min(255, finalColor[2]),
+                255
+            ];
+        }
         
         vec3.negate(_vectorToLight, lightDirection); 
         let NdotL = vec3.dot(normal, _vectorToLight);
@@ -179,7 +187,20 @@
           }
 
           if (closestHit) {
-            // Logika bayangan dihilangkan. isInShadow tidak lagi dihitung atau digunakan.
+            let isInShadow = false; 
+
+            vec3.scaleAndAdd(_shadowRayOrigin, closestHit.point, closestHit.normal, epsilon); 
+            vec3.negate(_shadowRayDirToLight, lightDirection); 
+
+            for (let s_idx = 0; s_idx < spheres.length; s_idx++) {
+                if (closestHit.object.isPlane || spheres[s_idx] !== closestHit.object) {
+                    const shadowHit = intersectSphere(_shadowRayOrigin, _shadowRayDirToLight, spheres[s_idx]);
+                    if (shadowHit && shadowHit.t > epsilon) { 
+                        isInShadow = true;
+                        break; 
+                    }
+                }
+            }
             
             let baseColor;
             let materialSpecular;
@@ -208,8 +229,7 @@
               materialShininess = closestHit.object.shininess;
             }
             
-            // Panggil calculateLighting tanpa parameter isInShadow
-            pixelColor = calculateLighting(closestHit.point, closestHit.normal, dir, baseColor, materialSpecular, materialShininess);
+            pixelColor = calculateLighting(closestHit.point, closestHit.normal, dir, baseColor, materialSpecular, materialShininess, isInShadow);
           }
 
           let index = (j * width + i) * 4;
