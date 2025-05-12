@@ -2,9 +2,9 @@
 <html lang="id">
 <head>
   <meta charset="UTF-8">
-  <title>Raytracing - Kaca Refraktif & Reflektif</title>
+  <title>Raytracing - Kaca Lebih Cerah Final</title>
   <style>
-    body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #1a1a1f; color: white; font-family: sans-serif;}
+    body { margin: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #202025; color: white; font-family: sans-serif;}
     canvas { border: 1px solid #303035; box-shadow: 0 0 12px rgba(0,0,0,0.5); margin-top: 10px;}
     .controls { margin-bottom: 10px; }
     .controls label { margin-right: 5px; }
@@ -13,13 +13,11 @@
 <body>
   <div class="controls">
     <label for="iorSlider">Glass Sphere IoR:</label>
-    <input type="range" id="iorSlider" min="1.0" max="2.5" value="1.52" step="0.01">
-    <span id="iorValue">1.52</span>
+    <input type="range" id="iorSlider" min="1.0" max="2.0" value="1.5" step="0.01">
+    <span id="iorValue">1.5</span>
   </div>
   <canvas id="canvas" width="500" height="500"></canvas>
 
-  <!-- HAPUS gl-matrix dari CDN -->
-  <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/gl-matrix/2.8.1/gl-matrix-min.js"></script> -->
   <script src="helper.js"></script>
   <script>
     (function() {
@@ -35,36 +33,39 @@
       const MAX_RECURSION_DEPTH = 5;
       const IOR_AIR = 1.0;
 
-      const planeLevelY = -1.5; // Naikkan sedikit lantai
+      const planeLevelY = -1.0;
 
-      // Ukuran dan posisi Y dasar
-      const glassSphereRadius = 1.5;  // Bola kaca utama (dulunya merah)
-      const solidGreenSphereRadius = 0.8; // Bola hijau padat
+      const mainGlassSphereRadius = 1.0;
+      const greenSolidSphereRadius = 0.6;
+      const blueSolidSphereRadius = 0.55;
 
-      const glassSphereCenterY = planeLevelY + glassSphereRadius;
-      const solidGreenSphereCenterY = planeLevelY + solidGreenSphereRadius;
+      const mainGlassSphereCenterY = planeLevelY + mainGlassSphereRadius;
+      const greenSolidSphereCenterY = planeLevelY + greenSolidSphereRadius;
+      const blueSolidSphereCenterY = planeLevelY + blueSolidSphereRadius;
 
-      let spheres = []; // Akan diisi oleh defineSpheres
+      let spheres = [];
 
       const plane = {
         point: createVec3(0, planeLevelY, 0),
         normal: createVec3(0, 1, 0),
-        color1: [60, 60, 65],   // Kotak gelap
-        color2: [180, 180, 190], // Kotak terang
-        specular: 0.2, shininess: 30, reflectivity: 0.6, // Lantai sangat reflektif
+        color1: [30, 30, 30],
+        color2: [225, 225, 225],
+        specular: 0.15, shininess: 25, reflectivity: 0.45,
         isPlane: true
       };
 
-      const cameraOrigin = createVec3(0, 1.2, 4.0); // Posisi kamera
-      const lightDirection = normalizeVec3(createVec3(), createVec3(0.6, -0.8, -0.3));
+      const cameraOrigin = createVec3(0, 0.8, 3.5);
+      // Cahaya sedikit lebih dari atas untuk menerangi lantai dan objek
+      const lightDirection = normalizeVec3(createVec3(), createVec3(0.5, -0.85, -0.3));
       const lightColor = [1, 1, 1];
-      const ambientLightIntensity = [0.07, 0.07, 0.09]; // Ambient rendah
-      const backgroundColor = [10, 12, 18];
+      // NAIKKAN AMBIENT GLOBAL SECARA SIGNIFIKAN LAGI
+      const ambientLightIntensity = [0.25, 0.25, 0.28];
+      // BACKGROUND ATAS JUGA DIBUAT LEBIH TERANG
+      const backgroundColor = [45, 50, 60];
 
       let imageData;
 
-      // Vektor temporary (dari helper.js)
-      const _oc = createVec3();
+      const _oc = createVec3(); /* ... Vektor temporary sama ... */
       const _hitPointTemp = createVec3();
       const _normalTemp = createVec3();
       const _P0O = createVec3();
@@ -77,31 +78,30 @@
       const _refractionDir = createVec3();
       const _tempVec1 = createVec3();
 
+
       function defineSpheres(currentGlassIoR) {
         spheres = [
-          // Bola 1: KACA UTAMA (Refraktif & Reflektif)
-          { center: createVec3(0.0, glassSphereCenterY, -2.0),
-            radius: glassSphereRadius,
-            color: [230, 235, 240], // Tint sangat netral untuk kaca bening
-            specular: 0.9, shininess: 250, reflectivity: 0.25, // Kaca memantul cukup baik
-            isRefractive: true, ior: currentGlassIoR, transparency: 0.90 // Dominan refraksi
+          { center: createVec3(0.0, mainGlassSphereCenterY, -1.8), // Kaca utama
+            radius: mainGlassSphereRadius,
+            color: [255, 255, 255], // Tint PUTIH
+            specular: 0.9, shininess: 300,
+            reflectivity: 0.15, // Kurangi reflektivitas permukaan agar fokus refraksi
+            isRefractive: true, ior: currentGlassIoR, transparency: 0.98
           },
-          // Bola 2: BOLA PADAT HIJAU
-          { center: createVec3(1.9, solidGreenSphereCenterY, -0.8),
-            radius: solidGreenSphereRadius,
-            color: [40, 180, 90], specular: 0.6, shininess: 70, reflectivity: 0.3,
+          { center: createVec3(-2.0, greenSolidSphereCenterY, -3.0), // Hijau di BELAKANG KIRI
+            radius: greenSolidSphereRadius,
+            color: [50, 220, 100], specular: 0.5, shininess: 60, reflectivity: 0.25, // Buat hijau lebih terang
             isRefractive: false
           },
-          // Anda bisa menambahkan bola biru dari kode asli jika mau:
-           { center: createVec3(-2.2, solidGreenSphereCenterY, -1.2), // Sesuaikan posisi Y dan X/Z
-             radius: 0.7, // Sesuaikan radius
-             color: [50, 100, 220], specular: 0.5, shininess: 50, reflectivity: 0.15,
+           { center: createVec3(1.7, blueSolidSphereCenterY, -1.5), // Biru di DEPAN KANAN
+             radius: blueSolidSphereRadius,
+             color: [60, 100, 230], specular: 0.4, shininess: 50, reflectivity: 0.20, // Buat biru lebih terang
              isRefractive: false
            }
         ];
       }
 
-      function intersectSphere(rayOrigin, rayDir, sphere) { /* ... Sama seperti sebelumnya ... */
+      function intersectSphere(rayOrigin, rayDir, sphere) { /* ... Sama ... */
         subtractVec3(_oc, rayOrigin, sphere.center);
         let a = dotVec3(rayDir, rayDir);
         let b = 2.0 * dotVec3(_oc, rayDir);
@@ -123,7 +123,7 @@
         normalizeVec3(_normalTemp, _normalTemp);
         return { t, point: cloneVec3(_hitPointTemp), normal: cloneVec3(_normalTemp), object: sphere };
       }
-      function intersectPlane(rayOrigin, rayDir, planeObj) { /* ... Sama seperti sebelumnya ... */
+      function intersectPlane(rayOrigin, rayDir, planeObj) { /* ... Sama ... */
         const N_plane = planeObj.normal;
         const P0_plane = planeObj.point;
         const DdotN = dotVec3(rayDir, N_plane);
@@ -134,7 +134,7 @@
         scaleAndAddVec3(_hitPointTemp, rayOrigin, rayDir, t);
         return { t, point: cloneVec3(_hitPointTemp), normal: cloneVec3(N_plane), object: planeObj };
       }
-      function refract(incident, normal, iorRatio_n1_over_n2) { /* ... Sama seperti sebelumnya ... */
+      function refract(incident, normal, iorRatio_n1_over_n2) { /* ... Sama ... */
         const cosI = -dotVec3(normal, incident);
         const sinT2 = iorRatio_n1_over_n2 * iorRatio_n1_over_n2 * (1.0 - cosI * cosI);
         if (sinT2 > 1.00001) return null; // TIR
@@ -145,31 +145,34 @@
         normalizeVec3(_refractionDir, _refractionDir);
         return _refractionDir;
       }
-
-      // Menghitung pencahayaan LANGSUNG (ambient, diffuse, specular) dengan shadow check
-      function calculateDirectLighting(hitPoint, normal, viewDirection, objectColor, materialSpecular, materialShininess) {
+      function calculateDirectLighting(hitPoint, normal, viewDirection, objectColor, materialSpecular, materialShininess, isGlass = false) { /* ... Sama ... */
         let localColor = createVec3();
-        setVec3(localColor, objectColor[0] * ambientLightIntensity[0], objectColor[1] * ambientLightIntensity[1], objectColor[2] * ambientLightIntensity[2]);
+        let ambientFactor = isGlass ? 0.0 : 1.0;
+        let diffuseFactor = isGlass ? 0.0 : 1.0;
+
+        setVec3(localColor,
+            objectColor[0] * ambientLightIntensity[0] * ambientFactor,
+            objectColor[1] * ambientLightIntensity[1] * ambientFactor,
+            objectColor[2] * ambientLightIntensity[2] * ambientFactor
+        );
+
         let isInShadow = false;
-        scaleAndAddVec3(_shadowRayOrigin, hitPoint, normal, epsilon * 10); // Offset shadow ray lebih jauh
+        scaleAndAddVec3(_shadowRayOrigin, hitPoint, normal, epsilon * 5);
         negateVec3(_shadowRayDirToLight, lightDirection);
         for (let s_idx = 0; s_idx < spheres.length; s_idx++) {
             const shadowHit = intersectSphere(_shadowRayOrigin, _shadowRayDirToLight, spheres[s_idx]);
             if (shadowHit && shadowHit.t > epsilon) { isInShadow = true; break; }
         }
-        // Tambahkan shadow check dari plane jika perlu (untuk bayangan objek ke plane)
-        // const planeShadowHit = intersectPlane(_shadowRayOrigin, _shadowRayDirToLight, plane);
-        // if (!isInShadow && planeShadowHit && planeShadowHit.t > epsilon) { /* Cek jarak jika plane di antara objek dan cahaya */ }
-
 
         if (!isInShadow) {
             negateVec3(_vectorToLight, lightDirection);
             let NdotL = dotVec3(normal, _vectorToLight);
             let diffuseIntensity = Math.max(0, NdotL);
+
             if (diffuseIntensity > 0) {
-                localColor[0] += objectColor[0] * diffuseIntensity * lightColor[0];
-                localColor[1] += objectColor[1] * diffuseIntensity * lightColor[1];
-                localColor[2] += objectColor[2] * diffuseIntensity * lightColor[2];
+                localColor[0] += objectColor[0] * diffuseIntensity * lightColor[0] * diffuseFactor;
+                localColor[1] += objectColor[1] * diffuseIntensity * lightColor[1] * diffuseFactor;
+                localColor[2] += objectColor[2] * diffuseIntensity * lightColor[2] * diffuseFactor;
             }
             if (materialSpecular > 0 && NdotL > 0) {
                 scaleVec3(_reflVecForLighting, normal, 2 * NdotL);
@@ -190,9 +193,18 @@
       }
 
       function traceRay(rayOrigin, rayDirection, depth) {
-        if (depth <= 0) return createVec3(backgroundColor[0], backgroundColor[1], backgroundColor[2]);
+        if (depth <= 0) {
+            let bgHitColor = createVec3(backgroundColor[0], backgroundColor[1], backgroundColor[2]);
+            if (depth < MAX_RECURSION_DEPTH -1 && depth > -MAX_RECURSION_DEPTH ) {
+                // Pencerahan background untuk sinar sekunder/tersier
+                bgHitColor[0] = Math.max(bgHitColor[0], 75); // Tingkatkan lagi
+                bgHitColor[1] = Math.max(bgHitColor[1], 75);
+                bgHitColor[2] = Math.max(bgHitColor[2], 85);
+            }
+            return bgHitColor;
+        }
 
-        let closestHit = null;
+        let closestHit = null; /* ... Pencarian Intersection Sama ... */
         for (let k = 0; k < spheres.length; k++) {
             const result = intersectSphere(rayOrigin, rayDirection, spheres[k]);
             if (result && (!closestHit || result.t < closestHit.t)) closestHit = result;
@@ -205,97 +217,85 @@
             const hitPoint = closestHit.point;
             const N_surface = closestHit.normal;
 
-            let objectBaseColor = hitObject.isPlane ? ( (Math.floor(hitPoint[0]*0.8) + Math.floor(hitPoint[2]*0.8)) % 2 === 0 ? plane.color1 : plane.color2 ) : hitObject.color;
+            let objectColorForDiffuse = hitObject.isPlane ? ( (Math.floor(hitPoint[0]*1.0) + Math.floor(hitPoint[2]*1.0)) % 2 === 0 ? plane.color1 : plane.color2 ) : hitObject.color;
 
-            // Hitung pencahayaan direct standar (ambient, diffuse, specular dari permukaan)
-            // Untuk kaca, objectBaseColor (tint) seharusnya tidak terlalu berkontribusi pada diffuse.
-            // Kita akan gunakan ini lebih sebagai dasar untuk objek padat.
-            let surfaceDirectColor = calculateDirectLighting(hitPoint, N_surface, rayDirection,
-                (hitObject.isRefractive ? [0,0,0] : objectBaseColor), // Untuk kaca, diffuse dari tint hampir nol
-                hitObject.specular, hitObject.shininess);
-
-            let finalColor = createVec3();
+            let finalColor = createVec3(0,0,0);
             let reflectedColor = createVec3(0,0,0);
             let refractedColor = createVec3(0,0,0);
 
-            // Koefisien Fresnel (Schlick's approximation) - menentukan rasio refleksi vs refraksi
-            let R0 = Math.pow((IOR_AIR - hitObject.ior) / (IOR_AIR + hitObject.ior), 2);
-            if (!hitObject.isRefractive) R0 = hitObject.reflectivity; // Untuk non-kaca, gunakan reflectivity langsung
-
             let cosIncident = -dotVec3(rayDirection, N_surface);
-            if (dotVec3(rayDirection, N_surface) > 0) { // Jika sinar dari dalam, balik normal
-                cosIncident = -dotVec3(rayDirection, negateVec3(createVec3(),N_surface));
-            }
-            cosIncident = Math.max(0, Math.min(1, cosIncident)); // clamp
-            let fresnelReflectance = R0 + (1 - R0) * Math.pow(1 - cosIncident, 5);
+            let n1 = IOR_AIR, n2 = hitObject.ior || IOR_AIR;
+            let normalForFresnelAndRefraction = cloneVec3(N_surface);
 
+            if (cosIncident < 0) {
+                cosIncident = -cosIncident;
+                let temp_n = n1; n1 = n2; n2 = temp_n;
+                negateVec3(normalForFresnelAndRefraction, normalForFresnelAndRefraction);
+            }
+            let R0 = Math.pow((n1 - n2) / (n1 + n2), 2);
+            if (!hitObject.isRefractive && hitObject.reflectivity !== undefined) {
+                 R0 = hitObject.reflectivity;
+            } else if (!hitObject.isRefractive) { R0 = 0; }
+
+            let fresnelReflectance = R0 + (1 - R0) * Math.pow(1 - cosIncident, 5);
+            fresnelReflectance = Math.max(0, Math.min(1, fresnelReflectance));
+            let actualReflectivityForSurface = hitObject.isRefractive ? fresnelReflectance : (hitObject.reflectivity || 0);
+
+            if (actualReflectivityForSurface > epsilon ) {
+                let dotNI = dotVec3(N_surface, rayDirection);
+                scaleVec3(_reflectionDir, N_surface, 2 * dotNI);
+                subtractVec3(_reflectionDir, rayDirection, _reflectionDir);
+                normalizeVec3(_reflectionDir, _reflectionDir);
+                const reflectionOrigin = createVec3(); scaleAndAddVec3(reflectionOrigin, hitPoint, _reflectionDir, epsilon * 2);
+                copyVec3(reflectedColor, traceRay(reflectionOrigin, _reflectionDir, depth - 1));
+            }
 
             if (hitObject.isRefractive && hitObject.transparency > 0) {
-                // --- Objek Kaca (Refraktif & Reflektif) ---
-                let refractionRatio = 1.0 - fresnelReflectance;
-                let reflectionRatio = fresnelReflectance;
-
-                // Refraksi
-                if (refractionRatio * hitObject.transparency > epsilon) {
-                    let n1_enter = IOR_AIR, n2_enter = hitObject.ior;
-                    let normalEnter = cloneVec3(N_surface);
-                    if (dotVec3(rayDirection, N_surface) > 0) { // Dari dalam?
-                        negateVec3(normalEnter, normalEnter); n1_enter = hitObject.ior; n2_enter = IOR_AIR;
-                    }
-                    const refractedDir = refract(rayDirection, normalEnter, n1_enter / n2_enter);
+                let fresnelTransmittance = 1.0 - fresnelReflectance;
+                if (fresnelTransmittance * hitObject.transparency > epsilon) {
+                    const refractedDir = refract(rayDirection, normalForFresnelAndRefraction, n1 / n2);
                     if (refractedDir) {
                         const internalRayOrigin = createVec3(); scaleAndAddVec3(internalRayOrigin, hitPoint, refractedDir, epsilon * 2);
                         if (!hitObject.isPlane) {
-                            subtractVec3(_oc, internalRayOrigin, hitObject.center);
-                            let a_i=dotVec3(refractedDir,refractedDir), b_i=2.0*dotVec3(_oc,refractedDir), c_i=dotVec3(_oc,_oc)-hitObject.radius*hitObject.radius;
-                            let discr_i=b_i*b_i-4*a_i*c_i;
-                            if(discr_i>=0){let t_exit=(-b_i+Math.sqrt(discr_i))/(2*a_i);
-                                if(t_exit>epsilon){const exitP=createVec3();scaleAndAddVec3(exitP,internalRayOrigin,refractedDir,t_exit);
-                                    const N_exit=createVec3();subtractVec3(N_exit,exitP,hitObject.center);normalizeVec3(N_exit,N_exit);
-                                    const finalRefrDir=refract(refractedDir,N_exit,hitObject.ior/IOR_AIR);
-                                    if(finalRefrDir){const finalRO=createVec3();scaleAndAddVec3(finalRO,exitP,finalRefrDir,epsilon);
-                                        copyVec3(refractedColor,traceRay(finalRO,finalRefrDir,depth-1));
-                                    }
-                                }
+                           subtractVec3(_oc,internalRayOrigin,hitObject.center);let a_i=dotVec3(refractedDir,refractedDir),b_i=2.*dotVec3(_oc,refractedDir),c_i=dotVec3(_oc,_oc)-hitObject.radius*hitObject.radius;let d_i=b_i*b_i-4*a_i*c_i;
+                            if(d_i>=0){let t_ex=(-b_i+Math.sqrt(d_i))/(2*a_i);
+                                if(t_ex>epsilon){const exP=createVec3();scaleAndAddVec3(exP,internalRayOrigin,refractedDir,t_ex);
+                                const N_ex=createVec3();subtractVec3(N_ex,exP,hitObject.center);normalizeVec3(N_ex,N_ex);
+                                const finalRD=refract(refractedDir,N_ex,hitObject.ior/IOR_AIR);
+                                if(finalRD){const finalRO=createVec3();scaleAndAddVec3(finalRO,exP,finalRD,epsilon*2);copyVec3(refractedColor,traceRay(finalRO,finalRD,depth-1));}}
                             }
                         } else {copyVec3(refractedColor,traceRay(internalRayOrigin,refractedDir,depth-1));}
                     }
                 }
+                let surfaceDirectSpecular = calculateDirectLighting(hitPoint, N_surface, rayDirection, [0,0,0], hitObject.specular, hitObject.shininess, true);
 
-                // Refleksi Permukaan Kaca
-                if (reflectionRatio > epsilon) {
-                    let dotNI = dotVec3(N_surface, rayDirection);
-                    scaleVec3(_reflectionDir, N_surface, 2 * dotNI);
-                    subtractVec3(_reflectionDir, rayDirection, _reflectionDir);
-                    const reflectionOrigin = createVec3(); scaleAndAddVec3(reflectionOrigin, hitPoint, _reflectionDir, epsilon);
-                    copyVec3(reflectedColor, traceRay(reflectionOrigin, _reflectionDir, depth - 1));
-                }
+                // Penggabungan untuk Kaca:
+                let transmissiveColorComponent = createVec3();
+                // NAIKKAN LAGI refractionBrightnessBoost
+                let refractionBrightnessBoost = 2.2; // Coba nilai 2.0 - 3.0
+                if(hitObject.ior < 1.35) refractionBrightnessBoost = 2.8;
+                scaleVec3(transmissiveColorComponent, refractedColor, fresnelTransmittance * hitObject.transparency * refractionBrightnessBoost);
 
-                // Kombinasi untuk Kaca:
-                // Specular dari cahaya langsung + Refleksi*Fresnel + Refraksi*(1-Fresnel)*Transparency
-                finalColor[0] = surfaceDirectColor[0] + reflectedColor[0] * reflectionRatio + refractedColor[0] * refractionRatio * hitObject.transparency;
-                finalColor[1] = surfaceDirectColor[1] + reflectedColor[1] * reflectionRatio + refractedColor[1] * refractionRatio * hitObject.transparency;
-                finalColor[2] = surfaceDirectColor[2] + reflectedColor[2] * reflectionRatio + refractedColor[2] * refractionRatio * hitObject.transparency;
-                // Tambahkan sedikit ambient dari warna tint kaca, dikalikan dengan bagian yang tidak transparan
-                finalColor[0] += hitObject.color[0] * ambientLightIntensity[0] * (1.0 - hitObject.transparency);
-                finalColor[1] += hitObject.color[1] * ambientLightIntensity[1] * (1.0 - hitObject.transparency);
-                finalColor[2] += hitObject.color[2] * ambientLightIntensity[2] * (1.0 - hitObject.transparency);
+                let reflectiveColorComponent = createVec3();
+                scaleVec3(reflectiveColorComponent, reflectedColor, actualReflectivityForSurface);
+
+                finalColor[0] = surfaceDirectSpecular[0] + reflectiveColorComponent[0] + transmissiveColorComponent[0];
+                finalColor[1] = surfaceDirectSpecular[1] + reflectiveColorComponent[1] + transmissiveColorComponent[1];
+                finalColor[2] = surfaceDirectSpecular[2] + reflectiveColorComponent[2] + transmissiveColorComponent[2];
+
+                // Tambahkan sedikit "global illumination" pada kaca, berdasarkan ambient global
+                // Ini akan memastikan kaca tidak hitam total jika refraksi/refleksi gelap
+                let glassBaseIlluminationFactor = 0.15; // Faktor kecerahan dasar untuk kaca
+                finalColor[0] += 255 * ambientLightIntensity[0] * glassBaseIlluminationFactor * hitObject.transparency;
+                finalColor[1] += 255 * ambientLightIntensity[1] * glassBaseIlluminationFactor * hitObject.transparency;
+                finalColor[2] += 255 * ambientLightIntensity[2] * glassBaseIlluminationFactor * hitObject.transparency;
 
 
-            } else if (hitObject.reflectivity > 0) { // Objek reflektif (non-kaca)
-                copyVec3(finalColor, surfaceDirectColor); // Mulai dengan direct lighting
-                if (fresnelReflectance > epsilon) { // Gunakan fresnelReflectance juga untuk non-kaca jika R0 diset ke reflectivity
-                    let dotNI = dotVec3(N_surface, rayDirection);
-                    scaleVec3(_reflectionDir, N_surface, 2 * dotNI);
-                    subtractVec3(_reflectionDir, rayDirection, _reflectionDir);
-                    const reflectionOrigin = createVec3(); scaleAndAddVec3(reflectionOrigin, hitPoint, _reflectionDir, epsilon);
-                    copyVec3(reflectedColor, traceRay(reflectionOrigin, _reflectionDir, depth - 1));
-                    finalColor[0] = surfaceDirectColor[0] * (1 - fresnelReflectance) + reflectedColor[0] * fresnelReflectance;
-                    finalColor[1] = surfaceDirectColor[1] * (1 - fresnelReflectance) + reflectedColor[1] * fresnelReflectance;
-                    finalColor[2] = surfaceDirectColor[2] * (1 - fresnelReflectance) + reflectedColor[2] * fresnelReflectance;
-                }
-            } else { // Objek padat biasa
-                copyVec3(finalColor, surfaceDirectColor);
+            } else { // Objek Padat
+                let directLighting = calculateDirectLighting(hitPoint, N_surface, rayDirection, objectColorForDiffuse, hitObject.specular, hitObject.shininess, false);
+                finalColor[0] = directLighting[0] * (1 - actualReflectivityForSurface) + reflectedColor[0];
+                finalColor[1] = directLighting[1] * (1 - actualReflectivityForSurface) + reflectedColor[1];
+                finalColor[2] = directLighting[2] * (1 - actualReflectivityForSurface) + reflectedColor[2];
             }
             return finalColor;
         } else {
@@ -303,7 +303,7 @@
         }
       }
 
-      function renderScene() { /* ... Sama seperti sebelumnya ... */
+      function renderScene() { /* ... Sama ... */
         console.time("RenderTime");
         imageData = ctx.createImageData(width, height);
         const currentGlassIoR = parseFloat(iorSlider.value);
@@ -313,7 +313,7 @@
           for (let i = 0; i < width; i++) {
             let u = (i + 0.5) / width * 2 - 1, v = 1 - (j + 0.5) / height * 2;
             let aspectRatio = width / height; u *= aspectRatio;
-            let dir = createVec3(u, v, -2.2); // Sesuaikan Z untuk FOV
+            let dir = createVec3(u, v, -2.0); // FOV, -2.0 agar objek utama di tengah
             normalizeVec3(dir, dir);
             let tracedColorVec3 = traceRay(cameraOrigin, dir, MAX_RECURSION_DEPTH);
             let index = (j * width + i) * 4;
